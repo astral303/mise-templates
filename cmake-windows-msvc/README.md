@@ -66,3 +66,31 @@ With `CMAKE_BUILD_DIR` empty, each `VCARCH` and `CMAKE_BUILD_TYPE` combination h
 - pwsh splits an unquoted argument such as `-DNAME=1.5` at the dot. Quote `-D` arguments: `mise run configure -- "-DNAME=1.5"`.
 - After a `CMAKE_INSTALL_PREFIX` change, some projects install to the old directory until you run `mise run configure -- --fresh`.
 - With several Visual Studio installations, the template uses the newest installation with the MSVC x64/x86 build tools.
+
+## Tests
+
+`tests/test.ps1` builds `tests/fixture` with the template and checks that:
+
+- an x64 build receives a configure argument with spaces and a dot
+- `mise run install` writes into `<CMAKE_BUILD_DIR>/install`
+- `mise set -E local VCARCH=x86` switches the build to x86
+- `VCARCH` in `mise.local.toml` overrides the template used as `mise.toml`
+
+Run it from the repository root on Windows:
+
+```pwsh
+pwsh -NoProfile -File cmake-windows-msvc/tests/test.ps1
+```
+
+When cmake or ninja is missing, the script installs it only from the URL and sha256 checksum in `tests/mise.lock`. GitHub Actions runs it on `windows-2025` when files under `cmake-windows-msvc/` change, and weekly.
+
+## Updating cmake or ninja
+
+1. Change the version in `[tools]`.
+2. Regenerate `tests/mise.lock`:
+
+   ```pwsh
+   pwsh -NoProfile -File cmake-windows-msvc/tests/update-lockfile.ps1
+   ```
+
+3. Run the tests.

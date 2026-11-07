@@ -1,8 +1,8 @@
 # Template usage: https://github.com/astral303/mise-templates/blob/main/cmake-windows-msvc/README.md
 
 [tools]
-cmake = "latest"
-ninja = "latest"
+cmake = "4.4.4"
+ninja = "1.13.2"
 
 [env]
 # Change a setting with `mise set -E local NAME=value`. Plain `mise set` writes to the project's

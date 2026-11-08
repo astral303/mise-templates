@@ -53,7 +53,6 @@ shell = "pwsh -NoProfile -Command"
 usage = 'arg "[cmake_args]..." var=#true help="arguments appended to the cmake command"'
 run = '''
 $ErrorActionPreference = "Stop"
-$PSNativeCommandUseErrorActionPreference = $true
 
 $architecture = $env:VCARCH
 if ($architecture -notin @("x64", "x86")) {
@@ -104,6 +103,9 @@ function Import-MsvcEnvironment {
 
     # Send the banner to stderr to keep it visible; stdout carries only the `set` listing.
     $environmentLines = & $env:ComSpec /d /s /c ('"{0}" {1} 1>&2 && set' -f $vcvarsallPath, $architecture)
+    if ($LASTEXITCODE -ne 0) {
+        throw "vcvarsall.bat $architecture exited with code $LASTEXITCODE."
+    }
     foreach ($line in $environmentLines) {
         $name, $value = $line -split "=", 2
         [Environment]::SetEnvironmentVariable($name, $value)
@@ -117,6 +119,18 @@ function ConvertTo-CMakePath {
     $Path -replace "\\", "/"
 }
 
+function Invoke-CMake {
+    param([string[]] $Arguments)
+
+    # Report a failure as one line with cmake's exit code. A PowerShell error would highlight
+    # one argument of the cmake command, as if that argument had caused the failure.
+    cmake @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        [Console]::Error.WriteLine("cmake exited with code $LASTEXITCODE.")
+        exit $LASTEXITCODE
+    }
+}
+
 function Invoke-Configure {
     param([string[]] $ExtraArguments = @())
 
@@ -125,11 +139,14 @@ function Invoke-Configure {
     # Pass the Ninja path to replace the one CMake cached on the first configure. The first
     # ninja.exe on PATH is the mise one: vcvarsall.bat appends Visual Studio's after it.
     $ninjaPath = (Get-Command ninja.exe -CommandType Application -TotalCount 1).Source
-    cmake -S . -B $buildDirectory -G Ninja `
-        "-DCMAKE_BUILD_TYPE=$buildType" `
-        "-DCMAKE_INSTALL_PREFIX=$(ConvertTo-CMakePath $installPrefix)" `
-        "-DCMAKE_MAKE_PROGRAM:FILEPATH=$(ConvertTo-CMakePath $ninjaPath)" `
-        @ExtraArguments
+    Invoke-CMake (@(
+        "-S", ".",
+        "-B", $buildDirectory,
+        "-G", "Ninja",
+        "-DCMAKE_BUILD_TYPE=$buildType",
+        "-DCMAKE_INSTALL_PREFIX=$(ConvertTo-CMakePath $installPrefix)",
+        "-DCMAKE_MAKE_PROGRAM:FILEPATH=$(ConvertTo-CMakePath $ninjaPath)"
+    ) + $ExtraArguments)
 }
 
 function Invoke-Build {
@@ -138,7 +155,7 @@ function Invoke-Build {
     if (-not (Test-Path -LiteralPath "$buildDirectory/build.ninja" -PathType Leaf)) {
         Invoke-Configure
     }
-    cmake --build $buildDirectory @ExtraArguments
+    Invoke-CMake (@("--build", $buildDirectory) + $ExtraArguments)
 }
 
 Import-MsvcEnvironment
@@ -149,7 +166,7 @@ switch ($env:MSVC_CMAKE_ACTION) {
         # Configure every time so a changed CMAKE_INSTALL_PREFIX takes effect.
         Invoke-Configure
         Invoke-Build
-        cmake --install $buildDirectory @cmakeArguments
+        Invoke-CMake (@("--install", $buildDirectory) + $cmakeArguments)
     }
     "shell" {
         Write-Output "MSVC $architecture environment. CMAKE_BUILD_DIR is $buildDirectory. Type exit to leave."

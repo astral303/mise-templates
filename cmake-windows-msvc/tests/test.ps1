@@ -38,6 +38,16 @@ function Invoke-Mise {
     }
 }
 
+function Get-MiseFailureOutput {
+    param([string] $ProjectPath, [string[]] $Arguments)
+
+    $output = & mise -C $ProjectPath @Arguments 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        throw "mise $($Arguments -join ' ') succeeded; the case expects it to fail."
+    }
+    $output -join "`n"
+}
+
 function Assert-PeMachineType {
     param([string] $ExecutablePath, [string] $Architecture)
 
@@ -82,6 +92,16 @@ $testCases = [ordered]@{
         Set-Content -LiteralPath (Join-Path $projectPath "mise.local.toml") -Value "[env]`nVCARCH = `"x86`""
         Invoke-Mise $projectPath @("run", "build")
         Assert-PeMachineType (Join-Path $projectPath "build/x86-Release/fixture.exe") "x86"
+    }
+    "a failed configure reports cmake's exit code, not a PowerShell error" = {
+        $projectPath = New-FixtureProject "failed-configure" "mise.local.toml"
+        $output = Get-MiseFailureOutput $projectPath @("run", "configure", "--", "-DFIXTURE_FAIL_CONFIGURE=ON")
+        if ($output -notmatch "cmake exited with code 1\.") {
+            throw "The output does not report cmake's exit code:`n$output"
+        }
+        if ($output -match "NativeCommandExitException") {
+            throw "The output shows a PowerShell error:`n$output"
+        }
     }
 }
 

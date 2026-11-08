@@ -5,7 +5,7 @@ This template builds CMake projects on Windows with Ninja and MSVC (the Visual S
 ## Requirements
 
 - Visual Studio or Visual Studio Build Tools with the **Desktop development with C++** workload (tested with Build Tools 2022)
-- PowerShell 7.4 or later (`pwsh`)
+- PowerShell 7 (`pwsh`), tested with 7.6
 - mise
 
 ## Setup
@@ -75,6 +75,7 @@ With `CMAKE_BUILD_DIR` empty, each `VCARCH` and `CMAKE_BUILD_TYPE` combination h
 - `mise run install` writes into `<CMAKE_BUILD_DIR>/install`
 - `mise set -E local VCARCH=x86` switches the build to x86
 - `VCARCH` in `mise.local.toml` overrides the template used as `mise.toml`
+- a failed configure reports cmake's exit code, not a PowerShell error
 
 Run it from the repository root on Windows:
 

@@ -1,0 +1,2 @@
+# Keep mise from loading the templates when it runs inside this repository.
+ignored_config_paths = ["*/mise.toml"]

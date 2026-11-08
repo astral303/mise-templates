@@ -1,0 +1,177 @@
+# Template usage: https://github.com/astral303/mise-templates/blob/main/cmake-windows-msvc/README.md
+
+[tools]
+cmake = "4.4.4"
+ninja = "1.13.2"
+
+[env]
+# Change a setting with `mise set -E local NAME=value`. Plain `mise set` writes to the project's
+# mise.toml if there is one, and mise.local.toml overrides that value.
+
+# Target architecture: x64 or x86.
+VCARCH = "x64"
+
+# Build type: Debug, Release, RelWithDebInfo, or MinSizeRel.
+CMAKE_BUILD_TYPE = "Release"
+
+# Directory the tasks pass to cmake -B. Empty means build/<VCARCH>-<CMAKE_BUILD_TYPE>.
+CMAKE_BUILD_DIR = ""
+
+# Directory `mise run install` writes to. Empty means <CMAKE_BUILD_DIR>/install.
+CMAKE_INSTALL_PREFIX = ""
+
+# Lets CMake 4 configure projects and bundled libraries that declare cmake_minimum_required
+# below 3.5.
+CMAKE_POLICY_VERSION_MINIMUM = "3.5"
+
+[tasks.configure]
+description = "Configure CMAKE_BUILD_DIR for Ninja and MSVC; extra arguments are passed to cmake"
+env = { MSVC_CMAKE_ACTION = "configure" }
+run = "mise run _cmake-msvc"
+
+[tasks.build]
+description = "Build CMAKE_BUILD_DIR, configuring it first if it has no build.ninja; extra arguments are passed to cmake --build"
+env = { MSVC_CMAKE_ACTION = "build" }
+run = "mise run _cmake-msvc"
+
+[tasks.install]
+description = "Configure, build, then install into CMAKE_INSTALL_PREFIX; extra arguments are passed to cmake --install"
+env = { MSVC_CMAKE_ACTION = "install" }
+run = "mise run _cmake-msvc"
+
+[tasks.shell]
+description = "Open pwsh with the MSVC environment for VCARCH and the mise cmake and ninja first on PATH"
+env = { MSVC_CMAKE_ACTION = "shell" }
+raw = true
+run = "mise run --raw _cmake-msvc"
+
+[tasks._cmake-msvc]
+description = "Import the MSVC environment from vcvarsall.bat for VCARCH, then run the MSVC_CMAKE_ACTION step"
+dir = "{{config_root}}"
+hide = true
+shell = "pwsh -NoProfile -Command"
+usage = 'arg "[cmake_args]..." var=#true help="arguments appended to the cmake command"'
+run = '''
+$ErrorActionPreference = "Stop"
+
+$architecture = $env:VCARCH
+if ($architecture -notin @("x64", "x86")) {
+    throw "VCARCH must be 'x64' or 'x86', not '$architecture'."
+}
+$buildType = $env:CMAKE_BUILD_TYPE
+if ([string]::IsNullOrWhiteSpace($buildType)) {
+    throw "CMAKE_BUILD_TYPE must name a build type, such as Release or Debug."
+}
+
+function Resolve-DirectorySetting {
+    param([string] $Value, [string] $Default)
+
+    $directory = if ([string]::IsNullOrWhiteSpace($Value)) { $Default } else { $Value }
+    [IO.Path]::GetFullPath($directory, $PWD.Path)
+}
+
+# Derive the defaults here, not in [env]: a default derived in mise.toml's [env] keeps using
+# mise.toml's VCARCH after mise.local.toml overrides it.
+$buildDirectory = Resolve-DirectorySetting $env:CMAKE_BUILD_DIR "build/$architecture-$buildType"
+$installPrefix = Resolve-DirectorySetting $env:CMAKE_INSTALL_PREFIX "$buildDirectory/install"
+
+# Export the resolved directories for `mise run shell`.
+$env:CMAKE_BUILD_DIR = $buildDirectory
+$env:CMAKE_INSTALL_PREFIX = $installPrefix
+
+$cmakeArguments = ConvertFrom-Json -NoEnumerate @'
+{{ usage.cmake_args | default(value=[]) | json_encode() }}
+'@
+
+function Import-MsvcEnvironment {
+    $vswherePath = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+    if (-not (Test-Path -LiteralPath $vswherePath -PathType Leaf)) {
+        throw "vswhere.exe was not found. Install Visual Studio or Visual Studio Build Tools with the Desktop development with C++ workload."
+    }
+    $vcvarsallPath = & $vswherePath `
+        -latest `
+        -products "*" `
+        -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+        -find "VC\Auxiliary\Build\vcvarsall.bat" |
+        Select-Object -First 1
+    if ([string]::IsNullOrWhiteSpace($vcvarsallPath)) {
+        throw "No Visual Studio installation has the MSVC x64/x86 build tools. Install the Desktop development with C++ workload."
+    }
+
+    # Put vswhere.exe on PATH: vcvarsall.bat runs it to find its own version.
+    $env:Path = "$(Split-Path $vswherePath -Parent);$env:Path"
+
+    # Send the banner to stderr to keep it visible; stdout carries only the `set` listing.
+    $environmentLines = & $env:ComSpec /d /s /c ('"{0}" {1} 1>&2 && set' -f $vcvarsallPath, $architecture)
+    if ($LASTEXITCODE -ne 0) {
+        throw "vcvarsall.bat $architecture exited with code $LASTEXITCODE."
+    }
+    foreach ($line in $environmentLines) {
+        $name, $value = $line -split "=", 2
+        [Environment]::SetEnvironmentVariable($name, $value)
+    }
+}
+
+function ConvertTo-CMakePath {
+    param([string] $Path)
+
+    # CMake reads a backslash in a cache value as an escape character.
+    $Path -replace "\\", "/"
+}
+
+function Invoke-CMake {
+    param([string[]] $Arguments)
+
+    # Report a failure as one line with cmake's exit code. A PowerShell error would highlight
+    # one argument of the cmake command, as if that argument had caused the failure.
+    cmake @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        [Console]::Error.WriteLine("cmake exited with code $LASTEXITCODE.")
+        exit $LASTEXITCODE
+    }
+}
+
+function Invoke-Configure {
+    param([string[]] $ExtraArguments = @())
+
+    # Pass the install prefix here, not to cmake --install: some projects resolve install paths
+    # while configuring, and the Windows default under Program Files needs administrator rights.
+    # Pass the Ninja path to replace the one CMake cached on the first configure. The first
+    # ninja.exe on PATH is the mise one: vcvarsall.bat appends Visual Studio's after it.
+    $ninjaPath = (Get-Command ninja.exe -CommandType Application -TotalCount 1).Source
+    Invoke-CMake (@(
+        "-S", ".",
+        "-B", $buildDirectory,
+        "-G", "Ninja",
+        "-DCMAKE_BUILD_TYPE=$buildType",
+        "-DCMAKE_INSTALL_PREFIX=$(ConvertTo-CMakePath $installPrefix)",
+        "-DCMAKE_MAKE_PROGRAM:FILEPATH=$(ConvertTo-CMakePath $ninjaPath)"
+    ) + $ExtraArguments)
+}
+
+function Invoke-Build {
+    param([string[]] $ExtraArguments = @())
+
+    if (-not (Test-Path -LiteralPath "$buildDirectory/build.ninja" -PathType Leaf)) {
+        Invoke-Configure
+    }
+    Invoke-CMake (@("--build", $buildDirectory) + $ExtraArguments)
+}
+
+Import-MsvcEnvironment
+switch ($env:MSVC_CMAKE_ACTION) {
+    "configure" { Invoke-Configure $cmakeArguments }
+    "build" { Invoke-Build $cmakeArguments }
+    "install" {
+        # Configure every time so a changed CMAKE_INSTALL_PREFIX takes effect.
+        Invoke-Configure
+        Invoke-Build
+        Invoke-CMake (@("--install", $buildDirectory) + $cmakeArguments)
+    }
+    "shell" {
+        Write-Output "MSVC $architecture environment. CMAKE_BUILD_DIR is $buildDirectory. Type exit to leave."
+        pwsh -NoLogo
+    }
+    default { throw "MSVC_CMAKE_ACTION must be configure, build, install, or shell." }
+}
+'''

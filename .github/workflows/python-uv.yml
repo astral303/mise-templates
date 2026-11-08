@@ -20,6 +20,7 @@ permissions:
 
 jobs:
   test:
+    name: test (${{ matrix.runner }})
     strategy:
       fail-fast: false
       matrix:

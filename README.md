@@ -10,6 +10,7 @@ mise configurations for building third-party projects. Each template is a direct
 | Template | Builds |
 | --- | --- |
 | [`cmake-windows-msvc`](cmake-windows-msvc) | CMake projects on Windows with Ninja and MSVC (the Visual Studio C++ compiler), for x64 or x86 |
+| [`python-uv`](python-uv) | Python projects with a `pyproject.toml`, using uv and a pinned Python; mise creates and activates `.venv` |
 
 ## Tests
 

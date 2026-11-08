@@ -84,10 +84,6 @@ $cmakeArguments = ConvertFrom-Json -NoEnumerate @'
 {{ usage.cmake_args | default(value=[]) | json_encode() }}
 '@
 
-# Resolve before vcvarsall.bat prepends the CMake and Ninja bundled with Visual Studio to PATH.
-$cmakePath = (Get-Command cmake.exe -CommandType Application -TotalCount 1).Source
-$ninjaPath = (Get-Command ninja.exe -CommandType Application -TotalCount 1).Source
-
 function Import-MsvcEnvironment {
     $vswherePath = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
     if (-not (Test-Path -LiteralPath $vswherePath -PathType Leaf)) {
@@ -112,7 +108,6 @@ function Import-MsvcEnvironment {
         $name, $value = $line -split "=", 2
         [Environment]::SetEnvironmentVariable($name, $value)
     }
-    $env:Path = "$(Split-Path $cmakePath -Parent);$(Split-Path $ninjaPath -Parent);$env:Path"
 }
 
 function ConvertTo-CMakePath {
@@ -127,7 +122,9 @@ function Invoke-Configure {
 
     # Pass the install prefix here, not to cmake --install: some projects resolve install paths
     # while configuring, and the Windows default under Program Files needs administrator rights.
-    # Pass the Ninja path to replace the one CMake cached on the first configure.
+    # Pass the Ninja path to replace the one CMake cached on the first configure. The first
+    # ninja.exe on PATH is the mise one: vcvarsall.bat appends Visual Studio's after it.
+    $ninjaPath = (Get-Command ninja.exe -CommandType Application -TotalCount 1).Source
     cmake -S . -B $buildDirectory -G Ninja `
         "-DCMAKE_BUILD_TYPE=$buildType" `
         "-DCMAKE_INSTALL_PREFIX=$(ConvertTo-CMakePath $installPrefix)" `

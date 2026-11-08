@@ -1,0 +1,16 @@
+# Template usage: https://github.com/astral303/mise-templates/blob/main/python-uv/README.md
+
+[tools]
+# Python for uv and the project's .venv. Change it with `mise use --pin -E local python@3.12`.
+python = "3.14.9"
+
+uv = "0.13.5"
+
+[settings]
+# Create .venv with uv when the project has a uv.lock, then activate it.
+python.uv_venv_auto = "create|source"
+
+[env]
+# Make uv use the Python above, not a Python uv downloaded itself or the version in the
+# project's .python-version.
+UV_PYTHON = { value = "{{ tools.python.path }}", tools = true }

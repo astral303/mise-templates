@@ -11,7 +11,8 @@ uv = "0.13.5"
 python.uv_venv_auto = "create|source"
 
 [env]
-# Make uv use the Python above, not a Python uv downloaded itself or the version in the
-# project's .python-version. Name the executable: with the install directory, uv rebuilds
-# .venv on every run.
-UV_PYTHON = { value = "{{ tools.python.path }}{% if os() == 'windows' %}\\python.exe{% else %}/bin/python3{% endif %}", tools = true }
+# Do not switch this to mise's documented "{{ tools.python.path }}": that value is the install
+# directory, and uv rebuilds .venv on every run with it. With the executable of the Python
+# above, uv ignores the project's .python-version and its own downloaded Pythons. The
+# `is defined` check keeps `mise env` working before that Python is installed.
+UV_PYTHON = { value = "{% if tools.python is defined %}{{ tools.python.path }}{% if os() == 'windows' %}\\python.exe{% else %}/bin/python3{% endif %}{% endif %}", tools = true }

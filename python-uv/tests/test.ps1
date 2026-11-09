@@ -71,6 +71,17 @@ $testCases = [ordered]@{
             }
         }
     }
+    "mise env succeeds before the pinned Python is installed" = {
+        $projectPath = New-FixtureProject "uninstalled-python"
+        $configPath = Join-Path $projectPath "mise.local.toml"
+        # Pin a Python version mise does not have: tools.python stays undefined.
+        $config = (Get-Content -Raw -LiteralPath $configPath) -replace '(?m)^python = "[^"]+"', 'python = "3.11.99"'
+        Set-Content -LiteralPath $configPath -Value $config -NoNewline
+        $output = & mise -C $projectPath env 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "mise env exited with $($LASTEXITCODE):`n$($output -join "`n")"
+        }
+    }
     "UV_PYTHON overrides the project's .python-version" = {
         $projectPath = New-FixtureProject "python-version"
         Set-Content -LiteralPath (Join-Path $projectPath ".python-version") -Value "3.13"

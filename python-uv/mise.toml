@@ -12,5 +12,6 @@ python.uv_venv_auto = "create|source"
 
 [env]
 # Make uv use the Python above, not a Python uv downloaded itself or the version in the
-# project's .python-version.
-UV_PYTHON = { value = "{{ tools.python.path }}", tools = true }
+# project's .python-version. Name the executable: with the install directory, uv rebuilds
+# .venv on every run.
+UV_PYTHON = { value = "{{ tools.python.path }}{% if os() == 'windows' %}\\python.exe{% else %}/bin/python3{% endif %}", tools = true }

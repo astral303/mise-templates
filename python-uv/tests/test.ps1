@@ -59,6 +59,18 @@ $testCases = [ordered]@{
         Invoke-Mise $projectPath @("exec", "--", "uv", "sync") | Out-Null
         Assert-ActivatedVenv $projectPath
     }
+    "uv run reuses the .venv from uv sync" = {
+        $projectPath = New-FixtureProject "rerun"
+        Invoke-Mise $projectPath @("exec", "--", "uv", "sync") | Out-Null
+        $markerPath = Join-Path $projectPath ".venv/marker"
+        Set-Content -LiteralPath $markerPath -Value "uv sync built this .venv"
+        foreach ($run in 1, 2) {
+            Invoke-Mise $projectPath @("exec", "--", "uv", "run", "python", "-c", "pass") | Out-Null
+            if (-not (Test-Path -LiteralPath $markerPath)) {
+                throw "uv run #$run rebuilt .venv."
+            }
+        }
+    }
     "UV_PYTHON overrides the project's .python-version" = {
         $projectPath = New-FixtureProject "python-version"
         Set-Content -LiteralPath (Join-Path $projectPath ".python-version") -Value "3.13"

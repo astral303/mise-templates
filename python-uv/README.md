@@ -56,7 +56,7 @@ Run these in the project root:
 | `python` in `[tools]` | `3.14.9` | The pinned Python, for uv and `.venv`. `mise use --pin -E local python@<version>` changes it. |
 | `uv` in `[tools]` | `0.13.5` | uv for `uv sync`, `uv add` and creating `.venv` |
 | `python.uv_venv_auto` | `create\|source` | Create `.venv` when the project has a `uv.lock`, then activate it |
-| `UV_PYTHON` | path of the pinned Python | Makes uv use the pinned Python |
+| `UV_PYTHON` | path of the pinned Python's executable | Makes uv use the pinned Python |
 
 ## Limitations
 
@@ -69,6 +69,7 @@ Run these in the project root:
 `tests/test.ps1` sets up `tests/fixture` with the template and checks that:
 
 - `uv sync` builds `.venv` on the pinned Python, and mise activates it
+- `uv run` reuses the `.venv` from `uv sync`
 - `UV_PYTHON` overrides the project's `.python-version`
 - `mise exec -- uv add` installs the package into `.venv`
 

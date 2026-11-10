@@ -60,7 +60,7 @@ if ($architecture -notin @("x64", "x86")) {
 }
 $buildType = $env:CMAKE_BUILD_TYPE
 if ([string]::IsNullOrWhiteSpace($buildType)) {
-    throw "CMAKE_BUILD_TYPE must name a build type, such as Release or Debug."
+    throw "CMAKE_BUILD_TYPE must specify a build type, such as Release or Debug."
 }
 
 function Resolve-DirectorySetting {
